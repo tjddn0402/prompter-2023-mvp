@@ -1,5 +1,9 @@
 # help from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps
+# help from https://github.com/langchain-ai/streamlit-agent/blob/main/streamlit_agent/basic_memory.py
 import streamlit as st
+from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_message_histories import StreamlitChatMessageHistory
+from langchain.prompts import PromptTemplate
 
 
 def Chatbot(query):
@@ -8,6 +12,7 @@ def Chatbot(query):
 
 
 def main():
+    st.set_page_config(page_title="Korea Law Help", page_icon="⚖️")
     st.title("Do you need any help about Korean Laws?")
 
     # Initialize chat history
