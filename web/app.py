@@ -1,9 +1,11 @@
 # help from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps
 import streamlit as st
 
+
 def Chatbot(query):
     """langchain에서 받아온 답변으로 대체할 예정."""
     return "wait.. i'm preparing to help you"
+
 
 def main():
     st.title("Do you need any help about Korean Laws?")
@@ -19,7 +21,9 @@ def main():
             st.markdown(message["content"])
 
     # React to user input
-    if query := st.chat_input("Please explain about your situation. Are you student? worker? tourist?"):
+    if query := st.chat_input(
+        "Please explain about your situation. Are you student? worker? tourist?"
+    ):
         # Display user message in chat message container
         st.chat_message("user").markdown(query)
         # Add user message to chat history
@@ -32,5 +36,6 @@ def main():
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()
