@@ -4,3 +4,5 @@ pinecone-client==2.2.2
 selenium==4.11.2
 streamlit==1.26.0
 tiktoken==0.4.0
+pysqlite3-binary==0.5.1
+chromadb==0.4.7

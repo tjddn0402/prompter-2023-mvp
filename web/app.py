@@ -6,14 +6,23 @@ from langchain.memory.chat_message_histories import StreamlitChatMessageHistory
 from langchain.prompts import PromptTemplate
 
 
-def Chatbot(query):
-    """langchain에서 받아온 답변으로 대체할 예정."""
-    return "wait.. i'm preparing to help you"
+def Chatbot(visitor_type, query):
+    query = f"I visited South Korea for {visitor_type}. " + query
+    return (
+        f"OK, you visit South Korea for {visitor_type}, and your inquiry is '{query}'!"
+    )
 
 
 def main():
     st.set_page_config(page_title="Korea Law Help", page_icon="⚖️")
     st.title("Do you need any help about Korean Laws?")
+
+    visitor_type = st.selectbox(
+        "I visit South Korea for ...",
+        ("Tour", "Study", "Work", "immigration", "etc"),
+    )
+    if visitor_type == "etc":
+        visitor_type = st.text_input("What is your purpose to visit South Korea?")
 
     # Initialize chat history
     if "messages" not in st.session_state:
@@ -34,7 +43,7 @@ def main():
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": query})
 
-        response = Chatbot(query)
+        response = Chatbot(visitor_type, query)
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
             st.markdown(response)
