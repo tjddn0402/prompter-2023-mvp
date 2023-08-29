@@ -18,23 +18,23 @@ from custom_chains.chat import get_legal_help_chain
 
 class LegalChatbot:
     def __init__(self):
-        self.llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
-        self.gpt4 = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-16k")
+        self.llm_translation = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
+        self.llm_advisor = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-16k")
         self.embedding_model = OpenAIEmbeddings()
-        self.inquiry_translation_chain = get_inquiry_translation_chain(self.llm)
+        self.inquiry_translation_chain = get_inquiry_translation_chain(self.llm_translation)
         self.db = getVectorDB(self.embedding_model)
-        self.legal_help_chain = get_legal_help_chain(self.gpt4)
-        self.answer_translation_chain = get_answer_translation_chain(self.llm)
+        self.legal_help_chain = get_legal_help_chain(self.llm_advisor)
+        self.answer_translation_chain = get_answer_translation_chain(self.llm_translation)
 
     def __call__(self, visitor_type, eng_query):
-        eng_query = f"I visited South Korea for {visitor_type}. " + eng_query
+        eng_query = f"I visiting South Korea for {visitor_type}. " + eng_query
         kor_inquiry = self.inquiry_translation_chain.run(eng_query)
         related_laws = self.db.get_relevant_documents(kor_inquiry)
         kor_advice = self.legal_help_chain.run(
             inquiry=kor_inquiry, related_laws=related_laws
         )
         eng_advice = self.answer_translation_chain.run(
-            tgt_lang="영어", legal_help=kor_advice
+            tgt_lang="English", legal_help=kor_advice
         )
         return eng_advice
 
