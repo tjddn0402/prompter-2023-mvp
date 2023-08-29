@@ -12,17 +12,17 @@
 ## Dockerfile 실행 명령
 - Dockerfile에서 docker image 생성
 ```bash
-docker build -t prompterday-mvp .
+docker build -t {dockerhub id}/prompterday-mvp .
+```
+- dockerhub에 업로드
+```bash
+docker login
+docker push {dockerhub_id}/prompterday-mvp
 ```
 - 이미지에서 컨테이너 생성
 ```bash
-docker run -p 8501:8501 prompterday-mvp
-```
-- 업로드
-```bash
-docker login
-docker tag prompterday-mvp:latest {dockerhub_id}/prompterday-mvp:latest
-docker push {dockerhub_id}/prompterday-mvp:latest
+docker pull {dockerhub_id}/prompterday-mvp
+docker run -p 8501:8501 -e OPENAI_API_KEY={YOUR_OPENAI_API_KEY} -d {dockerhub id}/prompterday-mvp
 ```
 ## GCP compute engine 사용
 - [dockerhub에 업로드한 image 지정해서 compute engine 실행](https://cloud.google.com/compute/docs/containers?hl=ko)
