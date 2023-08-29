@@ -34,27 +34,27 @@ def get_inquiry_translation_chain(llm) -> LLMChain:
 
 
 class Answer(BaseModel):
-    related_laws: List[str] = Field(description="관련 법령")
+    related_laws: List[str] = Field(description="related laws in English")
     # cases: List[str] = Field(description="고객의 상황과 비슷한 사건에 대한 판례")
-    advice: str = Field(description="법적 근거에 의한 법률가의 조언")
+    advice: str = Field(description="lawyer's advice based on related laws.")
 
 
-def get_answer_translation_chain(llm) -> LLMChain:
+def get_answer_translation_chain(llm, tgt_lang: str = "English") -> LLMChain:
     """한국어로 답변된 법률 조언을 외국어로 번역"""
     parser = PydanticOutputParser(pydantic_object=Answer)
-    template = """너는 한국어를 {tgt_lang}로 번역하는 번역가야. 법적인 도움이 필요한 외국인에게 법조인의 조언을 번역해줘.
+    template = """You are translator who translates Korean to {tgt_lang}. Now, you are tranlating Korean lawyer's advice.
 
-법률가의 조언 : {legal_help}
+lawyer's advice : ```{legal_help}```
 
 {format_instruction}
 """
     prompt = PromptTemplate(
         template=template,
-        input_variables=[
-            "tgt_lang",
-            "legal_help",
-        ],
-        partial_variables={"format_instruction": parser.get_format_instructions()},
+        input_variables=["legal_help"],
+        partial_variables={
+            "tgt_lang": tgt_lang,
+            "format_instruction": parser.get_format_instructions(),
+        },
     )
     # llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
     llm_chain = LLMChain(prompt=prompt, llm=llm)
