@@ -35,8 +35,8 @@ def get_inquiry_translation_chain(llm) -> LLMChain:
 
 class Answer(BaseModel):
     related_laws: List[str] = Field(description="related laws in English")
-    # cases: List[str] = Field(description="고객의 상황과 비슷한 사건에 대한 판례")
     advice: str = Field(description="lawyer's advice based on related laws.")
+    conclusion: str = Field(description="summary and conclusion about Lawyer's advice")
 
 
 def get_answer_translation_chain(llm, tgt_lang: str = "English") -> LLMChain:
@@ -46,6 +46,7 @@ def get_answer_translation_chain(llm, tgt_lang: str = "English") -> LLMChain:
 
 lawyer's advice : ```{legal_help}```
 
+Summary laywer's advice as following format.
 {format_instruction}
 """
     prompt = PromptTemplate(

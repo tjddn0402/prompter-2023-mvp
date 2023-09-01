@@ -1,19 +1,32 @@
 # help from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps
 # help from https://github.com/langchain-ai/streamlit-agent/blob/main/streamlit_agent/basic_memory.py
-from typing import Any
 import streamlit as st
+from jinja2 import Template
+import pinecone
+import json
+import os
 
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.memory.chat_message_histories import StreamlitChatMessageHistory
 
+from typing import Any, Dict
+from dotenv import load_dotenv
+
 from custom_chains.translation import (
     get_answer_translation_chain,
     get_inquiry_translation_chain,
 )
-from custom_chains.qa import getVectorDB
+from custom_chains.retriever import get_chroma_retriever, get_pinecone_retriever
 from custom_chains.chat import get_legal_help_chain
+
+
+load_dotenv()
+
+pinecone.init(
+    api_key=os.getenv("PINECONE_API_KEY"), environment=os.getenv("PINECONE_ENV")
+)
 
 
 class LegalChatbot:
@@ -22,21 +35,37 @@ class LegalChatbot:
         self.gpt4 = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-16k")
         self.embedding_model = OpenAIEmbeddings()
         self.inquiry_translation_chain = get_inquiry_translation_chain(self.llm)
-        self.db = getVectorDB(self.embedding_model)
+        self.retriever = get_pinecone_retriever(self.embedding_model)
         self.legal_help_chain = get_legal_help_chain(self.gpt4)
         self.answer_translation_chain = get_answer_translation_chain(self.llm)
 
-    def __call__(self, visitor_type, eng_query):
+    def __call__(self, visitor_type: str, eng_query: str) -> Dict:
         eng_query = f"I visited South Korea for {visitor_type}. " + eng_query
         kor_inquiry = self.inquiry_translation_chain.run(eng_query)
-        related_laws = self.db.get_relevant_documents(kor_inquiry)
+        related_laws = self.retriever.get_relevant_documents(kor_inquiry)
         kor_advice = self.legal_help_chain.run(
             inquiry=kor_inquiry, related_laws=related_laws
         )
         eng_advice = self.answer_translation_chain.run(
-            tgt_lang="영어", legal_help=kor_advice
+            tgt_lang="english", legal_help=kor_advice
         )
-        return eng_advice
+        eng_advice_dict = json.loads(eng_advice)
+        eng_advice_format = """{{ conclusion }}
+
+# Related Laws
+{% for law in related_laws %}
+- {{law}}
+{% endfor %}
+
+# AI Lawyer's advice
+{{ advice }}
+"""
+        answer_template = Template(eng_advice_format)
+        return answer_template.render(
+            conclution=eng_advice_dict["conclusion"],
+            related_laws=eng_advice_dict["related_laws"],
+            advice=eng_advice_dict["advice"],
+        )
 
 
 chatbot = LegalChatbot()

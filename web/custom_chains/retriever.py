@@ -1,7 +1,7 @@
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.llms import OpenAI
 from langchain.text_splitter import CharacterTextSplitter, TokenTextSplitter
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import Chroma, Pinecone
 from langchain.document_loaders import (
     TextLoader,
     # UnstructuredURLLoader,
@@ -14,6 +14,7 @@ import os
 from typing import Union, List
 from langchain.docstore.document import Document
 from langchain.chains.question_answering import load_qa_chain
+import pinecone
 
 __import__("pysqlite3")
 import sys
@@ -24,7 +25,7 @@ sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 # https://python.langchain.com/docs/use_cases/question_answering/how_to/question_answering
 
 
-def getVectorDB(
+def get_chroma_retriever(
     embedding_model: OpenAIEmbeddings,
     root: Union[str, bytes, os.PathLike] = "law_data/*/*.txt",
     chunk_size: int = 1000,
@@ -53,8 +54,17 @@ def getVectorDB(
     return chroma_db
 
 
+def get_pinecone_retriever(embedding_model):
+    vector_db = Pinecone(
+        index=pinecone.index.Index(os.getenv("PINECONE_INDEX")),
+        embedding=embedding_model,
+        text_key="text",
+    )
+    return vector_db.as_retriever()
+
+
 if __name__ == "__main__":
     query = "저는 노동자입니다. 사장님이 월급을 안줘요 ㅠㅠ"
-    vector_db_chain = getVectorDB()
+    vector_db_chain = get_chroma_retriever()
     related_laws = vector_db_chain.get_relevant_documents(query)
     print(related_laws)
