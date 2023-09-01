@@ -12,6 +12,7 @@ import json
 import os
 
 from xml_to_dict import XMLtoDict
+
 def law_public_api_call(query='10', numOfRows='10', pageNo='1'):
     with open("service_key.txt", encoding="utf-8") as f:
         key = str(f.readline())
