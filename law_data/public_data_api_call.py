@@ -1,5 +1,5 @@
 """
-국가법령정보센터 API에서 불러와서 데이터프레임으로 저장하는 코드
+국가법령정보센터 API에서 불러와서 json으로 저장하는 코드
 API URL : https://www.data.go.kr/data/15000115/openapi.do
 required libraries :
   - requests
