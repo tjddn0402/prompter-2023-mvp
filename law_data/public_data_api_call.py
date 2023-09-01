@@ -25,8 +25,8 @@ def law_public_api_call(query='10', numOfRows='10', pageNo='1'):
     encoding_type = str(response.encoding)
     contents = response.content.decode(encoding_type)
 
-    XD = XMLtoDict()
-    contents_to_dict = XD.parse(contents)
+    xd = XMLtoDict()
+    contents_to_dict = xd.parse(contents)
 
     path = "./law_json_files/"
     os.makedirs(path, exist_ok=True)
@@ -35,7 +35,9 @@ def law_public_api_call(query='10', numOfRows='10', pageNo='1'):
         name = contents_to_dict["LawSearch"]["law"][i]["법령명한글"]
         file = contents_to_dict["LawSearch"]["law"][i]
         with open(f"{path}{name}.json", "w", encoding="utf-8") as f:
-            json.dump(file, f, indent=4)
+            json.dump(file, f, indent=4, ensure_ascii=False)
+
+
 
 # all params should be "str"
 law_public_api_call(
