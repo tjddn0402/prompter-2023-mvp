@@ -10,7 +10,7 @@ from langchain.chains import LLMChain
 class Inquiry(BaseModel):
     inquiry: str = Field(description="고객의 문의 내용을 한국어로 번역한 내용")
     customer_type: Optional[str] = Field(
-        description="관광객, 유학생, 노동자, 사업가 등 외국인 고객의 유형",
+        description="관광객, 유학생, 노동자, 사업가 등 외국인 고객의 신분 또는 유형",
     )
 
 
@@ -27,6 +27,7 @@ def get_inquiry_translation_chain(llm) -> LLMChain:
         template=template,
         input_variables=["inquiry"],
         partial_variables={"format_instruction": parser.get_format_instructions()},
+        output_parser=parser,
     )
     # llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
     llm_chain = LLMChain(prompt=prompt, llm=llm)
@@ -35,8 +36,8 @@ def get_inquiry_translation_chain(llm) -> LLMChain:
 
 class Answer(BaseModel):
     related_laws: List[str] = Field(description="related laws in English")
-    # cases: List[str] = Field(description="고객의 상황과 비슷한 사건에 대한 판례")
     advice: str = Field(description="lawyer's advice based on related laws.")
+    conclusion: str = Field(description="summary and conclusion about Lawyer's advice")
 
 
 def get_answer_translation_chain(llm, tgt_lang: str = "English") -> LLMChain:
@@ -46,6 +47,7 @@ def get_answer_translation_chain(llm, tgt_lang: str = "English") -> LLMChain:
 
 lawyer's advice : ```{legal_help}```
 
+Summary laywer's advice as following format.
 {format_instruction}
 """
     prompt = PromptTemplate(
@@ -55,6 +57,7 @@ lawyer's advice : ```{legal_help}```
             "tgt_lang": tgt_lang,
             "format_instruction": parser.get_format_instructions(),
         },
+        output_parser=parser,
     )
     # llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
     llm_chain = LLMChain(prompt=prompt, llm=llm)
