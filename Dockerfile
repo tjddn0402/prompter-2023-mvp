@@ -2,7 +2,11 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-COPY . .
+COPY web .
+
+COPY .env .
+
+COPY requirements.txt .
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -17,4 +21,4 @@ RUN pip install -r requirements.txt
 
 EXPOSE 8501
 
-ENTRYPOINT ["streamlit", "run", "web/app.py", "--server.port=8501"]
+ENTRYPOINT ["streamlit", "run", "app.py"]
