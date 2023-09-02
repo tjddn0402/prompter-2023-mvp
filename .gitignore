@@ -4,3 +4,4 @@ poetry.lock
 pyproject.toml
 __pycache__
 *.txt
+*.json

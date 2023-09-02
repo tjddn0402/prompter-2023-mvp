@@ -1,27 +1,51 @@
 from langchain.chains import LLMChain
+from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
+from langchain.output_parsers import PydanticOutputParser
+
+from pydantic import BaseModel, Field
+from typing import List
 
 
-def get_legal_help_chain(llm) -> LLMChain:
-    init_chat_template = """너는 유능한 ai 변호사야. 한국을 방문하는 외국인이 법적인 도움을 요청해서 법적인 도움을 줘야 해.
+class LawyerAnswer(BaseModel):
+    legal_basis: List[str] = Field(description="Related laws about client's case")
+    legal_solution: str = Field(description="Solution to client's case")
+    conclusion: str = Field(description="Summarize key point in 1 sentence.")
 
-아래 대화는 client와 지금까지 주고받은 대화내용을 요약한 것이다.
-chat history with client : ```
+
+def get_legal_help_chain(llm: ChatOpenAI) -> LLMChain:
+    parser = PydanticOutputParser(pydantic_object=LawyerAnswer)
+    init_chat_template = """You are AI lawyer. Your role is to give legal help your client visiting korea.
+
+Following dialog is summary of conversation where you and your client.
+summary of conversation : ```
 {history}
 ```
 
-client의 새로운 법률 문의 : '{inquiry}'
+client's legal inquiry : '{inquiry}'
 
-관련 법 조항들 : ```
+related laws : ```
 {related_laws}
 ```
 
-지금까지 주고받은 대화의 맥락을 고려하고, 위의 법률을 참고해서 한국 법을 잘 모르는 외국인이 도움을 받을 수 있게 잘 설명해줘.
-단, 고객이 글을 알아보기 쉽게 markdown 문법으로 작성해줘.
+Considering context and legal basis, help your client who doesn't know about Korean law at all.
+And more, write your explain in markdown format to make it easy to understand.
+
+{format_instruction}
 """
     prompt = PromptTemplate(
         template=init_chat_template,
         input_variables=["inquiry", "related_laws", "history"],
+        partial_variables={"format_instruction": parser.get_format_instructions()},
     )
     chain = LLMChain(llm=llm, prompt=prompt)
     return chain
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    chain = get_legal_help_chain(ChatOpenAI())
+    chain.run("can I bring marihuana to Korea?")
