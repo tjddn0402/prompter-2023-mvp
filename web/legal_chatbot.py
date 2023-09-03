@@ -28,20 +28,23 @@ load_dotenv()
 
 
 class LegalChatbot:
-    def __init__(self, verbose: bool = False):
-        self.memory = ConversationSummaryMemory(
-            llm=ChatOpenAI(temperature=0, model="gpt-3.5-turbo-16k")
+    def __init__(self, model="gpt-4", verbose: bool = False):
+        self.model = model
+        self.verbose = verbose
+        self.sum_memory = ConversationSummaryMemory(
+            llm=ChatOpenAI(temperature=0, model=self.model),
+            human_prefix="Client",
+            ai_prefix="Lawyer",
         )
-        self.prev_summary = "Dialog is not started yet."
+        # self.prev_summary = "Dialog is not started yet."
 
-        self.llm_advisor = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-16k")
+        self.llm_advisor = ChatOpenAI(temperature=0, model=self.model)
         self.embedding_model = OpenAIEmbeddings()
 
         # self.retriever = get_faiss_ensemble_retriever(self.embedding_model)
         self.retriever = get_pinecone_retriever(self.embedding_model)
         self.legal_help_chain = get_legal_help_chain(self.llm_advisor)
 
-        self.verbose = verbose
 
     def __proc_legal_doc(self, doc:Document):
         src, _ = os.path.splitext(os.path.basename(doc.metadata["source"]))
@@ -53,7 +56,7 @@ class LegalChatbot:
         legal_basis = "\n\n\n".join(legal_basis)
 
         eng_advice = self.legal_help_chain.run(
-            inquiry=inquiry, related_laws=legal_basis, history=self.prev_summary
+            inquiry=inquiry, related_laws=legal_basis, history=self.sum_memory.buffer
         )
         eng_advice_dict = json.loads(eng_advice)
         eng_advice_format = """{{ conclusion }}
@@ -74,12 +77,13 @@ class LegalChatbot:
         )
 
         # 대화 내용 요약 후 메모리에 저장
-        self.memory.save_context(
+        self.sum_memory.save_context(
             {"client": inquiry}, {"lawyer": eng_advice_dict["conclusion"]}
         )
-        self.prev_summary = self.memory.predict_new_summary(
-            messages=self.memory.chat_memory.messages,
-            existing_summary=self.prev_summary,
+        self.sum_memory.chat_memory.messages[-1].additional_kwargs=eng_advice_dict
+        self.sum_memory.predict_new_summary(
+            messages=self.sum_memory.chat_memory.messages,
+            existing_summary=self.sum_memory.buffer,
         )
 
         if self.verbose:
@@ -88,15 +92,20 @@ class LegalChatbot:
             print(legal_basis)
             print()
             print("memory")
-            for msg in self.memory.chat_memory.messages:
+            for msg in self.sum_memory.chat_memory.messages:
                 print(msg)
             print()
-            print("summary")
-            print(self.prev_summary)
+            print("buffer")
+            print(self.sum_memory.buffer)
             print("#" * 100)
 
         return rendered_answer
 
+    def __del__(self):
+        # 추후 history를 따로 db에 저장
+        print(self.sum_memory.buffer)
+        print(self.sum_memory.chat_memory)
+        print("Chatbot deleted properly")
 
 if __name__ == "__main__":
     chatbot = LegalChatbot(verbose=True)
