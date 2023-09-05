@@ -9,11 +9,11 @@ load_dotenv()
 
 from legal_chatbot import LegalChatbot
 
-chatbot = LegalChatbot()
+chatbot = LegalChatbot(verbose=True)
 
 
 def main():
-    st.set_page_config(page_title="Korea Law Help", page_icon="⚖️")
+    st.set_page_config(page_title="LexServo", page_icon="⚖️")
     st.title("Do you need any help about Korean Laws?")
 
     # Initialize chat history
@@ -28,7 +28,7 @@ def main():
 
     # React to user input
     if query := st.chat_input(
-        "Please explain about your situation. Are you student? worker? tourist?"
+        "What kind of legal help do you need? Explain your situation."
     ):
         # Display user message in chat message container
         st.chat_message("user").markdown(query)
