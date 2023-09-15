@@ -5,3 +5,5 @@ pyproject.toml
 __pycache__
 *.txt
 *.json
+*.jsonl
+*.zip
