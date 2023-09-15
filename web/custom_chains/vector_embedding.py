@@ -48,8 +48,11 @@ class LawSplitter:
         with open(json_file, "r") as f:
             json_obj = json.load(f)
             json_obj = json_obj["기본정보"]
+
         metadata = dict()
         metadata["law_id"] = json_obj["법령ID"]
+        metadata["law_name"] = json_obj["법령명_한글"]
+
         txt_file = Path(txt_file)
         return self.split_text(full_text, txt_file.stem, metadata)
 
@@ -84,8 +87,11 @@ class PrecSplitter:
         with open(json_file, "r") as f:
             json_obj = json.load(f)
         docs: List[Document] = list()
+
         metadata = dict()
         metadata["prec_num"] = json_obj["판례정보일련번호"]
+        # metadata["prec_num"] = json_obj["판례정보일련번호"]
+        
         if sum(map(len, lines)) <= self.chunk_size:
             docs.append(Document(page_content="".join(lines), metadata=metadata))
         else:

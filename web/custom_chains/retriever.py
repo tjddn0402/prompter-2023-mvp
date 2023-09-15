@@ -14,47 +14,17 @@ import glob
 import os
 from os import PathLike
 from pathlib import Path
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Literal
 from langchain.docstore.document import Document
 from langchain.chains.question_answering import load_qa_chain
 import pinecone
 
 __import__("pysqlite3")
 import sys
-
 sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 # 참고
 # https://python.langchain.com/docs/use_cases/question_answering/how_to/question_answering
-
-
-def get_chroma_retriever(
-    embedding_model: Embeddings,
-    root: Union[str, bytes, os.PathLike] = "law_data/*/*.txt",
-    chunk_size: int = 1000,
-    chunk_overlap: int = 100,
-):
-    txt_spliter = TokenTextSplitter(
-        model_name="text-embedding-ada-002",
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-    )
-    # embedding_model = OpenAIEmbeddings()
-    # vector_db = Chroma(embedding_function=embedding_model)
-    txts = sorted(glob.glob(root))
-    splitted_txts: List[Document] = list()
-    for txt_path in txts:
-        raw_doc = TextLoader(txt_path).load()
-        splited_docs = txt_spliter.split_documents(raw_doc)
-        splitted_txts.extend(splited_docs)
-        # vector_db.add_documents(splited_docs)
-    chroma_db = Chroma.from_documents(
-        documents=splitted_txts,
-        embedding=embedding_model,
-        # persist_directory="law_data"
-        # metadatas=[{"source": str(i)} for i in range(len(splitted_txts))],
-    ).as_retriever()
-    return chroma_db
 
 
 def get_pinecone_retriever(
@@ -81,6 +51,17 @@ def get_faiss_ensemble_retriever(
 ):
     faiss_db = FAISS.load_local(folder_path=index_path, embeddings=embedding_model)
     return faiss_db.as_retriever()
+
+
+def get_chroma_retriever(
+    collection_name: Literal["law", "precedent"], persist_directory: str = "./chroma"
+):
+    db = Chroma(
+        collection_name=collection_name,
+        embedding_function=OpenAIEmbeddings(),
+        persist_directory=persist_directory,
+    )
+    return db.as_retriever()
 
 
 if __name__ == "__main__":
