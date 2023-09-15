@@ -1,7 +1,9 @@
 import os
 from os import PathLike
-from typing import Union
+from pathlib import Path
+from typing import Union, List, Dict, Optional, Literal
 import glob
+import json
 import time
 from tqdm import tqdm
 
@@ -12,15 +14,90 @@ from langchain.embeddings import (
 )  # 무료, OpenAIEmbeddings  #유료
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import CharacterTextSplitter
+from langchain.docstore.document import Document
 from langchain.indexes import VectorstoreIndexCreator
-from langchain.vectorstores import FAISS, Pinecone  # 무료
+from langchain.vectorstores import FAISS, Pinecone, Chroma  # 무료
 from langchain.vectorstores.base import VectorStoreRetriever
 from langchain.chains import RetrievalQA
+
+__import__("pysqlite3")
+import sys
+
+sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+
 import pinecone
+import chromadb
 
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 load_dotenv()
+
+
+class LawSplitter:
+    def __init__(self, chunk_size: int = 1100, chunk_overlap: int = 0) -> None:
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
+    def split_from_file(self, txt_file: Union[str, PathLike, Path]) -> List[Document]:
+        json_file = txt_file.replace(".txt", ".json")
+        with open(txt_file, "r") as f:
+            full_text = "".join(f.readlines())
+            # full_text = "\n".join(f.readlines())
+        with open(json_file, "r") as f:
+            json_obj = json.load(f)
+            json_obj = json_obj["기본정보"]
+        metadata = dict()
+        metadata["law_id"] = json_obj["법령ID"]
+        txt_file = Path(txt_file)
+        return self.split_text(full_text, txt_file.stem, metadata)
+
+    def split_text(
+        self, text: str, law_name: str, metadata: Optional[Dict] = None
+    ) -> List[Document]:
+        joes = text.split("\n\n")
+        docs: List[Document] = list()
+        cache = law_name
+        for jo in joes:
+            if len(law_name + jo) > self.chunk_size:
+                if len(cache) > 0:
+                    docs.append(Document(page_content=cache, metadata=metadata))
+                    cache = law_name
+                docs.append(Document(page_content=law_name + jo, metadata=metadata))
+            else:
+                cache += jo
+        if len(cache) > len(law_name):
+            docs.append(Document(page_content=cache, metadata=metadata))
+        return docs
+
+
+class PrecSplitter:
+    def __init__(self, chunk_size: int = 1100, chunk_overlap: int = 0) -> None:
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
+    def split_from_file(self, txt_file: Union[str, PathLike, Path]) -> List[Document]:
+        json_file = txt_file.replace(".txt", ".json")
+        with open(txt_file, "r") as f:
+            lines = f.readlines()
+        with open(json_file, "r") as f:
+            json_obj = json.load(f)
+        docs: List[Document] = list()
+        metadata = dict()
+        metadata["prec_num"] = json_obj["판례정보일련번호"]
+        if sum(map(len, lines)) <= self.chunk_size:
+            docs.append(Document(page_content="".join(lines), metadata=metadata))
+        else:
+            cache = lines[0]
+            for line in lines[1:]:
+                if len(cache) + len(line) > self.chunk_size:
+                    docs.append(Document(page_content=cache, metadata=metadata))
+                    cache = lines[0] + line
+                else:
+                    cache += line
+            if len(cache) > len(lines[0]):
+                docs.append(Document(page_content=cache, metadata=metadata))
+        return docs
 
 
 def vectorized_embedding_store(
@@ -60,6 +137,42 @@ def vectorized_embedding_store(
     # index.faiss, index.pkl 파일이 저장됨
     index.vectorstore.save_local("law_vectorized_result")
 
+
+def embed_with_chroma(
+    # collectoin_name: Literal["law","precedent"],
+    persist_directory: Union[str, PathLike, bytes] = "./chroma",
+    law_path="law_data/law_kor",
+    prec_path="law_data/cases",
+    chunk_size: int = 1000,
+    chunk_overlap: int = 0,
+):
+    embedding_model = OpenAIEmbeddings()
+
+    law_db = Chroma(
+        collection_name="law",
+        embedding_function=embedding_model,
+        persist_directory=persist_directory,
+    )
+    law_splitter = LawSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    for law_txt in tqdm(
+        glob.glob(os.path.join(law_path, "*.txt")), desc="vectorizing laws"
+    ):
+        law_docs = law_splitter.split_from_file(law_txt)
+        law_db.add_documents(documents=law_docs)
+
+    prec_db = Chroma(
+        collection_name="precedent",
+        embedding_function=embedding_model,
+        persist_directory=persist_directory,
+    )
+    prec_splitter = PrecSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    for prec_txt in tqdm(
+        glob.glob(os.path.join(prec_path, "*.txt")), desc="vectorizing precedents"
+    ):
+        prec_docs = prec_splitter.split_from_file(prec_txt)
+        prec_db.add_documents(prec_docs)
+
+
 def embed_with_pinecone(
     root_path: Union[str, PathLike, bytes] = "./law_data",
     chunk_size: int = 1000,
@@ -76,7 +189,9 @@ def embed_with_pinecone(
                 file_path = os.path.join(root, file)
                 txt_files.append(file_path)
 
-    txt_spliter = CharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    txt_spliter = CharacterTextSplitter(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    )
     embedding_model = OpenAIEmbeddings()
     vector_store = Pinecone(
         index=pinecone.Index(os.getenv("PINECONE_INDEX")),
@@ -87,7 +202,6 @@ def embed_with_pinecone(
         raw_docs = TextLoader(txt_file).load()
         splited_docs = txt_spliter.split_documents(raw_docs)
         vector_store.add_documents(splited_docs)
-
 
 
 def query(text):
@@ -114,13 +228,25 @@ def query(text):
     """
 
 
-def get_pinecone_retriever()->VectorStoreRetriever:
-    db_call = Pinecone(        
+def get_pinecone_retriever() -> VectorStoreRetriever:
+    db_call = Pinecone(
         index=pinecone.Index(os.getenv("PINECONE_INDEX")),
         embedding=OpenAIEmbeddings(),
         text_key="text",
     )
     return db_call.as_retriever()
+
+
+def get_chroma_retreiver(
+    collection_name: Literal["law", "precedent"], persist_directory: str = "./chroma"
+):
+    db = Chroma(
+        collection_name=collection_name,
+        embedding_function=OpenAIEmbeddings(),
+        persist_directory=persist_directory,
+    )
+    return db.as_retriever()
+
 
 if __name__ == "__main__":
     # faiss
@@ -130,107 +256,18 @@ if __name__ == "__main__":
 
     # pinecone
     # embed_with_pinecone(root_path="law_data/law_eng",)
-    retriever = get_pinecone_retriever()
+    embed_with_chroma()
+    law_retriever = get_chroma_retreiver(
+        collection_name="law",
+    )
+    prec_retriever = get_chroma_retreiver(
+        collection_name="precedent",
+    )
     while True:
         q = input("query:")
-        docs = retriever.get_relevant_documents(q)
-        print(docs)
-        print("#"*100)
-
-"""
-다양한 vector embedding 도구들
-
-__all__ = [
-    "OpenAIEmbeddings",
-    "HuggingFaceEmbeddings",
-    "CohereEmbeddings",
-    "ClarifaiEmbeddings",
-    "ElasticsearchEmbeddings",
-    "JinaEmbeddings",
-    "LlamaCppEmbeddings",
-    "HuggingFaceHubEmbeddings",
-    "MlflowAIGatewayEmbeddings",
-    "ModelScopeEmbeddings",
-    "TensorflowHubEmbeddings",
-    "SagemakerEndpointEmbeddings",
-    "HuggingFaceInstructEmbeddings",
-    "MosaicMLInstructorEmbeddings",
-    "SelfHostedEmbeddings",
-    "SelfHostedHuggingFaceEmbeddings",
-    "SelfHostedHuggingFaceInstructEmbeddings",
-    "FakeEmbeddings",
-    "AlephAlphaAsymmetricSemanticEmbedding",
-    "AlephAlphaSymmetricSemanticEmbedding",
-    "SentenceTransformerEmbeddings",
-    "GooglePalmEmbeddings",
-    "MiniMaxEmbeddings",
-    "VertexAIEmbeddings",
-    "BedrockEmbeddings",
-    "DeepInfraEmbeddings",
-    "DashScopeEmbeddings",
-    "EmbaasEmbeddings",
-    "OctoAIEmbeddings",
-    "SpacyEmbeddings",
-    "NLPCloudEmbeddings",
-    "GPT4AllEmbeddings",
-]
-"""
-
-"""
-다양한 vector db 들
-
-__all__ = [
-    "AlibabaCloudOpenSearch",
-    "AlibabaCloudOpenSearchSettings",
-    "AnalyticDB",
-    "Annoy",
-    "AtlasDB",
-    "AwaDB",
-    "AzureSearch",
-    "Cassandra",
-    "Chroma",
-    "Clickhouse",
-    "ClickhouseSettings",
-    "DeepLake",
-    "DocArrayHnswSearch",
-    "DocArrayInMemorySearch",
-    "ElasticVectorSearch",
-    "ElasticKnnSearch",
-    "FAISS",
-    "PGEmbedding",
-    "Hologres",
-    "LanceDB",
-    "MatchingEngine",
-    "Marqo",
-    "Milvus",
-    "Zilliz",
-    "SingleStoreDB",
-    "Chroma",
-    "Clarifai",
-    "OpenSearchVectorSearch",
-    "AtlasDB",
-    "DeepLake",
-    "Annoy",
-    "MongoDBAtlasVectorSearch",
-    "MyScale",
-    "MyScaleSettings",
-    "OpenSearchVectorSearch",
-    "Pinecone",
-    "Qdrant",
-    "Redis",
-    "Rockset",
-    "SKLearnVectorStore",
-    "SingleStoreDB",
-    "StarRocks",
-    "SupabaseVectorStore",
-    "Tair",
-    "Tigris",
-    "Typesense",
-    "Vectara",
-    "VectorStore",
-    "Weaviate",
-    "Zilliz",
-    "PGVector",
-]
-
-"""
+        law_docs = law_retriever.get_relevant_documents(q)
+        prec_docs = prec_retriever.get_relevant_documents(q)
+        print(law_docs)
+        print("-" * 100)
+        print(prec_docs)
+        print("#" * 100)
