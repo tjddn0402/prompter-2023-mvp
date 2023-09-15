@@ -6,6 +6,7 @@ import glob
 import json
 import time
 from tqdm import tqdm
+from collections import deque
 
 from langchain.document_loaders import TextLoader
 from langchain.embeddings import (
@@ -154,11 +155,23 @@ def embed_with_chroma(
         persist_directory=persist_directory,
     )
     law_splitter = LawSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    lq = deque()
     for law_txt in tqdm(
         glob.glob(os.path.join(law_path, "*.txt")), desc="vectorizing laws"
     ):
         law_docs = law_splitter.split_from_file(law_txt)
-        law_db.add_documents(documents=law_docs)
+        try:
+            law_db.add_documents(documents=law_docs)
+        except:
+            lq.append(law_docs)
+
+    while lq:
+        ldocs = lq.popleft()
+        try:
+            law_db.add_documents(documents=ldocs)
+        except:
+            lq.append(ldocs)
+
 
     prec_db = Chroma(
         collection_name="precedent",
@@ -166,11 +179,23 @@ def embed_with_chroma(
         persist_directory=persist_directory,
     )
     prec_splitter = PrecSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    pq = deque()
     for prec_txt in tqdm(
         glob.glob(os.path.join(prec_path, "*.txt")), desc="vectorizing precedents"
     ):
         prec_docs = prec_splitter.split_from_file(prec_txt)
-        prec_db.add_documents(prec_docs)
+        try:
+            prec_db.add_documents(prec_docs)
+        except:
+            pq.append(prec_docs)
+
+    while pq:
+        pdocs = pq.popleft()
+        try:
+            prec_db.add_documents(documents=pdocs)
+        except:
+            pq.append(pdocs)
+
 
 
 def embed_with_pinecone(
